@@ -1,0 +1,5 @@
+node_modules/
+test/.browser/
+test/screenshots/
+.dev.vars
+.wrangler/

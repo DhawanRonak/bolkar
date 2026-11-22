@@ -16,3 +16,6 @@ console.log('\nMisses:'); console.log(misses.join('\n') || '  none');
 
 if (misses.length) process.exitCode = 1;
 await import('./rules.mjs');
+await import('./v2.mjs');
+await import('./voice.mjs');
+await import('../test/browser.mjs');

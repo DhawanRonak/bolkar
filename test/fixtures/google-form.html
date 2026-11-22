@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Scholarship fixture</title><form>
+<div role="listitem"><div role="heading">Full name *</div><input aria-label="Full name" aria-required="true"></div>
+<div role="listitem"><div role="heading">Mobile number *</div><input aria-label="Mobile number" aria-required="true"></div>
+<div role="listitem"><div role="heading">Education *</div><div role="radiogroup" aria-required="true"><div role="radio" tabindex="0" aria-label="Class 12" aria-checked="false">Class 12</div><div role="radio" tabindex="0" aria-label="Undergraduate" aria-checked="false">Undergraduate</div></div></div>
+<div role="listitem"><div role="heading">State</div><div role="listbox" tabindex="0"><div role="option" aria-selected="false">Goa</div><div role="option" aria-selected="false">Kerala</div></div></div>
+<div role="listitem"><div role="heading">Interests</div><div role="checkbox" aria-label="Science" aria-checked="false">Science</div><div role="checkbox" aria-label="Arts" aria-checked="false">Arts</div></div>
+<div role="listitem"><div role="heading">Date of birth</div><input type="date"></div>
+<div role="listitem"><div role="heading">Upload certificate</div><input type="file"></div>
+<div role="listitem"><div role="heading">Aadhaar number</div><input></div><button id="submit" type="submit">Submit</button></form>
+<script>document.querySelector('form').onsubmit=e=>{e.preventDefault();window.submitted=true;};document.querySelectorAll('[role="radio"],[role="checkbox"],[role="option"]').forEach(n=>n.onclick=()=>{const role=n.getAttribute('role');if(role==='radio')n.parentNode.querySelectorAll('[role="radio"]').forEach(e=>e.setAttribute('aria-checked','false'));const a=role==='option'?'aria-selected':'aria-checked';n.setAttribute(a,String(n.getAttribute(a)!=='true'));});</script></html>

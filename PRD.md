@@ -1,47 +1,43 @@
-﻿# PRD: BolKar — fill a form by speaking
+# PRD: BolKar v2
 
-Updated: 22 November 2026
+Updated: 23 November 2026
 
-## Problem and audience
+## Problem and promise
 
-For people who are more comfortable speaking than typing, a form can be a barrier. BolKar guides a Hindi, Hinglish or English speaker through preparing six scholarship-form details. Helpers can use the same flow alongside the applicant.
+Language is a barrier beyond literacy. Applicants in India, families, and helpers should answer in a familiar language while entering values the form expects. Choose a language, speak or type, check, and submit yourself.
 
-## Promise and scope
+## Surfaces and architecture
 
-Answer one question, check what was heard, then save it. The current product prepares a local form; it does not submit applications or check eligibility. There is no AI dependency or server API.
+Chrome Manifest V3 side panel reads Google Forms first and ordinary HTML forms second. It fills only bounded validated fields and never submits or navigates. The buildless web app provides a language dial, functional scholarship sample, fictional example, skippable four-step tour, consent/profile editor, installation instructions, and a separate timing research page with CSV export.
 
-## Principles
-
-1. Recognise, normalise, validate, confirm. Every answer requires confirmation, including names and gender.
-2. Reject unsupported input rather than silently dropping unknown number words.
-3. Keep typing available throughout the guided questions.
-4. Keep personal details local to this browser, with clear disclosure that the browser speech provider may process audio remotely.
-5. Preserve unfinished work, and provide a clear reset.
+Cloudflare Pages Functions hold the Sarvam secret: saaras:v4/transcribe STT, bulbul:v3/shubh TTS, sarvam-translate:v1 translation, and sarvam-30b chat with temperature zero. Shared UMD modules run in Node and clients; extension copies are synchronised. No Gemini endpoint existed. Deployment remains plain HTML/CSS/JS with build command exit 0.
 
 ## Flow
 
-1. A skippable five-step tour opens on the first visit; completion or skipping is remembered in localStorage. “How it works” reopens it.
-2. Select English or Hindi/Hinglish. Field questions and read-back use that language; controls remain in English.
-3. Speak using the microphone or type the answer. Listening, no-speech and permission errors have visible states. Chrome over HTTPS or localhost with microphone permission is required for voice; typing remains usable.
-4. Show the transcript, validated value and any monthly-to-yearly conversion. Read back every valid answer. Confirm using the button or yes/haan; reject with Change answer or no/nahi. A replacement can also be typed.
-5. Confirmed answers populate an editable summary. Pending confirmation, input, chosen language, saved status and confirmed details survive refresh.
-6. Review all six details, save to this device and optionally download a text copy. Editing reopens the field and requires confirmation again. Reset asks before clearing local work.
-7. “Try an example” loads fictional details with income pending, enabling confirmation and final review without typing. It replaces the current draft.
+Choose one of 23 languages using the scroll-snapping dial, or record with language_code unknown and confirm detection. Eleven languages have voice output; others show translated text and accept voice answers. Offer consent and optional profile setup on first use. A skipped profile does not block form filling. Saving needs explicit consent in the selected language; when consent translation is unavailable, continue without profile saving.
 
-## Rules
+Read/explain the form. Saved profile values are proposed one at a time for confirmation before filling, then remaining questions are asked. Mapping sends available profile key names and question titles, not a complete profile. Chat proposes structured JSON for transliteration, digit/date conversion and exact-option mapping. Parse defensively, retry once, then use rules or manual entry. Untrusted page text cannot execute actions. Every proposed value passes deterministic validation.
 
-Fields: full name, date of birth, gender, mobile number, postal PIN and yearly family income. Mobile: 10 digits starting 6–9, with optional country prefix or leading zero. PIN: six digits starting 1–9. Dates must exist and give age 5–100. Amounts must be positive and within ₹1,000–₹5 crore annually; explicit monthly amounts are multiplied by 12. Supports selected English and Hindi number words, Devanagari digits, double/triple, lakh/hazaar/crore and common fractional expressions. Vocabulary is limited; this is validation of format, not identity or real-world assignment.
+Push-to-talk states: idle, recording with meter, thinking, speaking, error. Tap start/stop; auto-stop at 25 seconds. Recording is disabled during playback. No browser recognition/read-aloud loop. Denied permission, offline services, timeout and mock mode have actionable messages. Typing is always available.
 
-## Current requirements
+All values require confirmation. Mobile, PIN, DOB, income, email and uncertain values also have spoken read-back where TTS exists. Yes/no vocabulary and explicit buttons support correction. Two failures recommend typing. Keep original transcript and final value in local logs, shown during review. Final review lists all questions and supports edits; sample submission needs review confirmation. External Submit is always pressed by the user.
 
-P0: voice and typed entry; per-field question; validation and actionable errors; explicit confirmation; final review; local persistence; reset; example; guided tour; mobile accessibility.
+## Profile, rules and recovery
 
-The former participant timing dashboard, plain-typing research mode and CSV research export are removed to focus the product on form completion. Research comparison can be conducted separately; no participant outcomes are asserted.
+Device-local fields: full name, DOB, gender, mobile, email, address, city, state, PIN, category, education, annual family income, preferred language. Edit/delete and Forget everything are available. Confirmed answers may prefill the editor but still require saving consent; fictional examples are never silently saved as profiles.
 
-## Evaluation and future research
+Never store or fill Aadhaar/ID/PAN, bank/IFSC, OTP, password or card details. Skip upload/sign-in-gated fields. Whitelist profile fields. Preserve speech.js digit/mobile/PIN/amount/date/yes-no validators as final authority; add email format validation. Existing scholarship age and annual-income constraints apply. Format validation is not identity or eligibility verification.
 
-Run `node eval/run_eval.mjs` and `node eval/flow.mjs`. The 43 author-written utterances plus regression cases are development checks, not user research. Future research should test whether voice reduces effort, which read-back errors people catch, and where typing feels more private or reliable. Broader vocabulary, additional languages and integration with actual forms are future scope.
+Draft, pending answer, profile and local history survive refresh. Reset clears assistant/sample work, keeping the profile. Forget everything also clears settings, tour and research data. Existing external page values remain user-controlled. Re-read changed forms/new form pages rather than replaying stale fields.
 
-## Risks
+## Offline and proxy requirements
 
-Speech recognition varies by accent and noise: mitigate with visible transcript, confirmation and typing. People can confirm errors without checking: make the value prominent and allow edits. LocalStorage is device-local but not encrypted: disclose storage near the form, support download and reset, and avoid collecting server-side data.
+Missing key or SARVAM_MOCK=1 gives deterministic mocks. Clients label mock/fallback states and refuse canned STT as real speech. Typing/sample work offline. Translation failure shows source questions. Proxy: allowed-origin CORS, POST/preflight only, bounded audio/text bodies, safe JSON errors, best-effort per-IP limiting, no audio/transcript logging, no client secrets.
+
+## Evaluation and metrics
+
+Run node eval/run_eval.mjs: 43 authored normaliser examples, regressions, language table, direct mock handler Request tests, JSON schemas, validators overriding model outputs, profile safety, role fixture extraction/filling and browser flow where Chrome exists. These are development checks. Future study metrics: correct-value completion, wrong accepted values, correction count, typed fallback rate, detected-language confirmation, and elapsed time including review. The research page collects anonymous timing rounds and CSV; no results are preloaded or claimed.
+
+## Risks and verification gates
+
+Live audio, answer and question text reach Sarvam through our proxy. Explain third-party processing; local profiles/logs are unencrypted; deletion cannot revoke previously processed data. Broad extension host permissions support generic forms and need install disclosure. Google Forms DOM changes, hidden options, date widgets, gates and multi-page layouts can break integration; verify fills and leave manual entry available. Accent/dialect recognition, translation/transliteration, side-panel microphone permissions and real Google Forms require live testing and native-speaker review. Local fixture success is not proof of live compatibility. Rate limiting is isolate-local; public deployments need platform protection.

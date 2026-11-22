@@ -1,0 +1,9 @@
+import vm from 'node:vm';import {readFileSync} from 'node:fs';import assert from 'node:assert/strict';
+let requests=0,release,clipDone=false,stopped=0,delay=0;
+class Recorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['audio'],{type:'audio/webm'})});this.onstop();}}
+const states=[],context=vm.createContext({self:{MediaRecorder:Recorder},MediaRecorder:Recorder,navigator:{mediaDevices:{getUserMedia:async()=>{requests++;return {getTracks:()=>[{stop(){stopped++;}}]};}}},Blob,FormData,Uint8Array,Error,console,setTimeout:(f,ms)=>{delay=ms;return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){}});
+vm.runInContext(readFileSync(new URL('../core/voice.js',import.meta.url),'utf8'),context);
+const Voice=context.self.BolkarVoice,api={call:()=>new Promise(r=>release=r)},v=new Voice(api,(s,n)=>states.push([s,n]));
+const speaking=v.speak('Hello','en-IN');assert.equal(v.state,'speaking');await v.record('en-IN',()=>{});assert.equal(requests,0,'cannot record while audio loads/plays');release({mock:true});await speaking;assert.equal(v.state,'error');
+await v.record('en-IN',()=>clipDone=true);assert.equal(v.state,'recording');assert.equal(delay,25000);assert.equal(requests,1);await v.record('en-IN',()=>clipDone=true);assert.equal(v.state,'thinking');await v.record('en-IN',()=>{});assert.equal(requests,1,'cannot record during transcription');release({mock:true,transcript:'Sunita Devi'});await new Promise(r=>setImmediate(r));assert.equal(v.state,'error');assert.equal(clipDone,false,'canned transcript must not become a real answer');assert.equal(stopped,1);
+v.stop();assert.equal(v.state,'idle');console.log('Voice lifecycle passed: recording/playback exclusion, thinking lock, 25s limit, resource cleanup, mock rejection.');
