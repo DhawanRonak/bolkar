@@ -1,133 +1,22 @@
-<!DOCTYPE html>
+﻿<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BolKar: fill a form by speaking</title>
-<link rel="stylesheet" href="base.css">
-<style>
-:root{--accent:#6d28a8;--accent-soft:#efe5fa}
-.layout{display:grid;grid-template-columns:400px 1fr;gap:18px;align-items:start}@media(max-width:860px){.layout{grid-template-columns:1fr}}
-.phone{margin:0;display:flex;flex-direction:column;min-height:620px}.chat{flex:1;padding:14px;display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:470px;background:#f6f3fa}
-.b{max-width:88%;padding:10px 12px;border-radius:14px;background:#fff;border:1px solid var(--line)}.b.me{align-self:flex-end;background:var(--accent);color:#fff;border:0}.b.sys{background:var(--warn-soft);border-color:#efd9a8;font-size:13px}
-.b big{display:block;font-size:20px;font-weight:700;letter-spacing:.5px}.dock{padding:10px;border-top:1px solid var(--line);display:grid;gap:8px}
-.mic{width:64px;height:64px;border-radius:50%;background:var(--accent);color:#fff;border:0;font-size:13px;font-weight:700;justify-self:center}.mic.on{background:var(--bad);animation:p 1s infinite}@keyframes p{50%{box-shadow:0 0 0 10px rgba(179,38,30,.15)}}
-@media(prefers-reduced-motion:reduce){.mic.on{animation:none}}
-.form label{margin-top:8px}.form input{width:100%;background:#faf8f3}.form input.ok{border-color:var(--ok);background:var(--ok-soft)}.form input.bad{border-color:var(--bad);background:var(--bad-soft)}
-.seg{display:flex;gap:6px;flex-wrap:wrap}.seg button[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
-</style>
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#174e40"><title>BolKar — Say it. Check it. Save it.</title><link rel="stylesheet" href="base.css"><script defer src="speech.js"></script><script defer src="app.js"></script></head>
 <body>
-<div class="concept">Concept prototype for a product case study. The form is fictional and nothing you say or type leaves this page.</div>
-<div class="wrap">
-  <header class="top"><div><h1>BolKar</h1><small>Fill a form by speaking in Hindi, Hinglish or English. Risky answers are read back before they are saved.</small></div>
-    <div class="seg" id="lang"><button data-l="hi" aria-pressed="true">हिंदी</button><button data-l="en" aria-pressed="false">English</button></div></header>
-  <div class="layout">
-    <div class="phone">
-      <div class="chat" id="chat" aria-live="polite"></div>
-      <div class="dock">
-        <button class="mic" id="mic" aria-label="Speak">Speak</button>
-        <small id="micNote" style="text-align:center"></small>
-        <div class="row"><input id="typed" class="grow" placeholder="Or type what you would say" aria-label="Type your answer"><button id="send">Send</button></div>
-      </div>
-    </div>
-    <div>
-      <div class="card form">
-        <div class="row"><h3 class="grow">Scholarship application (sample form)</h3><span class="pill" id="timer">0.0 s</span></div>
-        <div id="formFields"></div>
-        <div class="row" style="margin-top:12px"><button class="primary" id="restart">Start voice-guided run</button><button id="plain">Start plain typing run</button><button class="ghost" id="submitPlain" disabled>Finish typing run</button></div>
-      </div>
-      <div class="card">
-        <h3>Research session</h3>
-        <p class="muted">Ask each participant to fill the form twice: once by voice, once by typing (alternate the order). Each run is timed and scored.</p>
-        <div class="row"><input id="pid" placeholder="Participant code" maxlength="12"><button id="dl">Download all runs (CSV)</button></div>
-        <table id="runs" style="margin-top:8px"></table>
-      </div>
-      <div class="card"><h3>What was heard (log)</h3><div class="log" id="log"></div></div>
-    </div>
-  </div>
-</div>
-<script src="speech.js"></script>
-<script>
-const B = BolKar, $ = id => document.getElementById(id), F = B.FIELDS;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
-const T = { hi: { retry: 'माफ़ कीजिए, समझ नहीं आया। फिर से बोलिए।', type: 'आप चाहें तो नीचे लिख भी सकते हैं।', yn: 'कृपया हाँ या नहीं बोलिए।', again: 'ठीक है, फिर से बताइए।', done: 'सब जानकारी भर दी गई है। एक बार देख लीजिए।', saved: 'ठीक है।' },
-  en: { retry: 'Sorry, I did not get that. Please say it again.', type: 'You can also type it below.', yn: 'Please say yes or no.', again: 'Okay, tell me again.', done: 'Everything is filled in. Please check it once.', saved: 'Got it.' } };
-let lang = 'hi', run = null, runs = store.get('bolkar_runs', []), tick = null, rec = null, listening = false;
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-$('micNote').textContent = SR ? 'Tap, then speak. Needs microphone permission and an https page.' : 'This browser has no speech recognition. Type instead (Chrome on Android or desktop supports speech).';
-function log(s) { $('log').textContent += s + '\n'; $('log').scrollTop = 1e6; }
-function say(text, cls, big) { const d = document.createElement('div'); d.className = 'b ' + (cls || ''); d.innerHTML = (big ? `<big>${esc(big)}</big>` : '') + esc(text); $('chat').appendChild(d); $('chat').scrollTop = 1e6;
-  if (!cls && window.speechSynthesis) { try { const u = new SpeechSynthesisUtterance(text); u.lang = lang === 'hi' ? 'hi-IN' : 'en-IN'; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {} } }
-function renderForm(editable) {
-  $('formFields').innerHTML = F.map(f => `<label for="f_${f.id}">${f.label}</label><input id="f_${f.id}" ${editable ? '' : 'readonly'} autocomplete="off">`).join('');
-}
-function startTimer() { clearInterval(tick); const t0 = Date.now(); tick = setInterval(() => { $('timer').textContent = ((Date.now() - t0) / 1000).toFixed(1) + ' s'; }, 100); return t0; }
-function pid() { return $('pid').value.trim().replace(/[^A-Za-z0-9_-]/g, '') || 'P' + String(Date.now()).slice(-4); }
+<header class="header"><a class="brand" href="./" aria-label="BolKar home"><span class="brand-mark" aria-hidden="true">b</span>BolKar<span class="brand-detail">YOUR WORDS, LESS WORK</span></a><button id="how" class="quiet">How it works <span aria-hidden="true">↗</span></button></header>
+<main>
+<section class="intro"><div><p class="eyebrow">FOR PEOPLE WHO WOULD RATHER SPEAK</p><h1>Your voice.<br>A filled form.</h1><p class="lead">Answer one question at a time in Hindi, Hinglish or English. Check what we heard before you save.</p></div><div class="intro-aside"><span class="mini-line">01 &nbsp; Speak or type</span><span class="mini-line">02 &nbsp; Check your answer</span><span class="mini-line">03 &nbsp; Save your details</span></div></section>
+<div class="workspace">
+<section class="voice-card" aria-labelledby="question"><div class="card-top"><span class="eyebrow" id="step">QUESTION 1 OF 6</span><label class="language" for="language">Speak in <select id="language"><option value="en">English</option><option value="hi">हिन्दी / Hinglish</option></select></label></div><div class="progress" aria-hidden="true"><div id="progress"></div></div>
+<div id="interaction"><h2 id="question" tabindex="-1"></h2><p id="hint" class="muted"></p><div class="voice-area" id="voiceArea"><button id="mic" class="mic" aria-label="Start microphone"><svg width="30" height="36" viewBox="0 0 30 36" fill="none" aria-hidden="true"><rect x="10" y="2" width="10" height="21" rx="5" stroke="currentColor" stroke-width="2.3"/><path d="M4 17v2a11 11 0 0 0 22 0v-2M15 30v5M10 35h10" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/></svg></button><strong id="voiceState">Tap to speak</strong><p id="micNote" class="muted"></p><button id="repeat" class="text-button">Listen to the question</button></div>
+<div id="feedback" role="status" aria-live="polite"></div>
+<div id="confirmation" class="confirmation" hidden><p class="eyebrow">CHECK BEFORE SAVING</p><div id="heard" class="heard"></div><p id="normalNote"></p><div class="actions"><button id="confirm" class="primary">Yes, save answer</button><button id="change">Change answer</button><button id="read" class="text-button">Read it back</button></div></div>
+<form id="answerForm"><label for="typed" id="typeLabel">Or type your answer</label><div class="input-row"><input id="typed" autocomplete="off" maxlength="160" aria-describedby="hint feedback"><button type="submit" id="send">Check answer <span aria-hidden="true">→</span></button></div></form></div>
+<div id="completion" hidden><div class="success-symbol" aria-hidden="true">✓</div><h2 id="completeTitle" tabindex="-1">Ready for a final look.</h2><p id="completeNote">Check the details alongside. You can edit any answer before saving.</p><button id="save" class="primary">Save form on this device</button><button id="download">Download details</button></div>
+<div class="example-row" id="exampleArea"><span>See it in action, no typing needed.</span><button id="example" class="text-button">Try an example →</button></div></section>
+<aside class="summary-card" id="summary"><div class="summary-heading"><div><p class="eyebrow">YOUR DETAILS</p><h2>Scholarship form</h2></div><span id="count" class="badge">0 / 6</span></div><p class="muted summary-note">A practice form to prepare your details. Nothing is sent to a scholarship provider.</p><dl id="details"></dl><div class="storage-note"><span class="status-dot"></span><span id="storage">Draft kept on this device</span></div><button id="reset" class="text-button reset">Reset form</button></aside>
+</div><p class="privacy">Your draft stays in this browser. Voice recognition may send audio to your browser’s speech service. Use typing for private details on a shared device.</p>
+</main>
+<dialog id="tour" aria-labelledby="tourTitle"><div class="tour-top"><span id="tourCount" class="eyebrow"></span><button id="skip" class="text-button">Skip tour</button></div><h2 id="tourTitle"></h2><p id="tourText"></p><div class="actions"><button id="back">Back</button><button id="next" class="primary">Next</button></div></dialog>
+<dialog id="resetDialog" aria-labelledby="resetTitle"><h2 id="resetTitle">Clear this form?</h2><p>This removes your answers and saved form from this browser.</p><div class="actions"><button id="cancelReset">Keep my answers</button><button id="doReset" class="primary">Clear form</button></div></dialog>
+</body></html>
 
-// ---------- voice-guided run ----------
-function startVoice() {
-  renderForm(false); $('chat').innerHTML = ''; $('log').textContent = ''; $('submitPlain').disabled = true;
-  run = { mode: 'voice', participant: pid(), i: 0, stage: 'ask', fails: 0, pending: null, t0: startTimer(), attempts: 0, corrections: 0, rejects: 0, typedTurns: 0 };
-  ask();
-}
-function ask() { const f = F[run.i]; run.stage = 'ask'; run.fails = 0; say(f[lang]); }
-function handle(text, typed) {
-  if (!run || run.mode !== 'voice' || run.stage === 'done' || !text.trim()) return;
-  const f = F[run.i]; say(text, 'me'); if (typed) run.typedTurns++;
-  if (run.stage === 'confirm') {
-    const a = B.yesNo(text); log(`[${f.id}] confirm heard "${text}" -> ${a}`);
-    if (a === 'yes') return save(f, run.pending);
-    if (a === 'no') { run.corrections++; say(T[lang].again); return ask(); }
-    return say(T[lang].yn);
-  }
-  run.attempts++; const r = B.parse(f, text); log(`[${f.id}] heard "${text}" -> ${r.ok ? r.value : 'REJECTED: ' + r.why}`);
-  if (!r.ok) { run.rejects++; run.fails++; say(r.why, 'sys'); say(T[lang].retry + (run.fails >= 2 ? ' ' + T[lang].type : '')); return; }
-  if (f.confirm) { run.pending = r.value; run.stage = 'confirm'; const rb = B.readBack(f, r.value, lang); if (r.note) say(r.note, 'sys'); say(rb.speak, '', rb.shown); }
-  else save(f, r.value);
-}
-function save(f, value) {
-  const el = $('f_' + f.id); el.value = f.type === 'amount' ? '₹' + Number(value).toLocaleString('en-IN') : value; el.className = 'ok';
-  if (++run.i < F.length) { say(T[lang].saved); ask(); } else finish();
-}
-function finish() {
-  clearInterval(tick); run.stage = 'done'; say(T[lang].done);
-  record({ participant: run.participant, mode: 'voice', seconds: +((Date.now() - run.t0) / 1000).toFixed(1), attempts: run.attempts, rejected: run.rejects, corrected_after_readback: run.corrections, typed_turns: run.typedTurns, invalid_fields: 0 });
-}
-// ---------- plain typing run (the baseline) ----------
-function startPlain() {
-  renderForm(true); $('chat').innerHTML = ''; say('Plain typing run: fill the form on the right by typing, then press "Finish typing run".', 'sys');
-  run = { mode: 'plain', participant: pid(), t0: startTimer() }; $('submitPlain').disabled = false; $('f_' + F[0].id).focus();
-}
-function finishPlain() {
-  clearInterval(tick); let bad = 0;
-  for (const f of F) { const el = $('f_' + f.id), r = B.parse(f, el.value); el.className = r.ok ? 'ok' : 'bad'; if (!r.ok) bad++; }
-  record({ participant: run.participant, mode: 'typing', seconds: +((Date.now() - run.t0) / 1000).toFixed(1), attempts: F.length, rejected: 0, corrected_after_readback: 0, typed_turns: F.length, invalid_fields: bad });
-  $('submitPlain').disabled = true; run = null;
-}
-function record(r) { runs.push(r); store.set('bolkar_runs', runs); renderRuns(); }
-const COLS = ['participant', 'mode', 'seconds', 'attempts', 'rejected', 'corrected_after_readback', 'typed_turns', 'invalid_fields'];
-function renderRuns() { $('runs').innerHTML = runs.length ? '<tr>' + COLS.map(c => `<th>${c.replace(/_/g, ' ')}</th>`).join('') + '</tr>' + runs.slice(-8).map(r => '<tr>' + COLS.map(c => `<td>${esc(r[c])}</td>`).join('') + '</tr>').join('') : '<tr><td class="muted">No runs yet.</td></tr>'; }
-$('dl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([COLS.join(',') + '\n' + runs.map(r => COLS.map(c => r[c]).join(',')).join('\n')], { type: 'text/csv' })); a.download = 'bolkar_runs.csv'; document.body.appendChild(a); a.click(); a.remove(); };
-
-// ---------- input ----------
-$('send').onclick = () => { const v = $('typed').value; $('typed').value = ''; handle(v, true); };
-$('typed').onkeydown = e => { if (e.key === 'Enter') $('send').click(); };
-$('mic').onclick = () => {
-  if (!SR) { $('typed').focus(); return; }
-  if (listening) { rec.stop(); return; }
-  try { speechSynthesis.cancel(); } catch (e) {}
-  rec = new SR(); rec.lang = lang === 'hi' ? 'hi-IN' : 'en-IN'; rec.interimResults = false; rec.maxAlternatives = 1;
-  rec.onstart = () => { listening = true; $('mic').classList.add('on'); $('mic').textContent = 'Listening'; };
-  rec.onend = () => { listening = false; $('mic').classList.remove('on'); $('mic').textContent = 'Speak'; };
-  rec.onerror = e => { $('micNote').textContent = 'Microphone problem (' + e.error + '). You can type instead.'; };
-  rec.onresult = e => handle(e.results[0][0].transcript, false);
-  rec.start();
-};
-$('lang').querySelectorAll('button').forEach(b => b.onclick = () => { $('lang').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); lang = b.dataset.l; if (run && run.mode === 'voice' && run.stage !== 'done') ask(); });
-$('restart').onclick = startVoice; $('plain').onclick = startPlain; $('submitPlain').onclick = finishPlain;
-renderForm(false); renderRuns(); say('Press "Start voice-guided run" to begin.', 'sys');
-</script>
-</body>
-</html>

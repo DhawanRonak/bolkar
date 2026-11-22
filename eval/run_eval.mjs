@@ -13,3 +13,6 @@ for (const u of U) {
 console.log('group             n   right   wrong value accepted   wrongly rejected');
 for (const [k, b] of Object.entries(by)) console.log(`${k.padEnd(16)} ${String(b.n).padStart(2)}   ${(b.right / b.n * 100).toFixed(0).padStart(4)}%   ${String(b.wrongAccepted).padStart(8)}               ${String(b.wronglyRejected).padStart(6)}`);
 console.log('\nMisses:'); console.log(misses.join('\n') || '  none');
+
+if (misses.length) process.exitCode = 1;
+await import('./rules.mjs');
